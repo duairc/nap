@@ -1,0 +1,103 @@
+#!/bin/sh
+if [ -n $1 ]; then
+	duration=$1
+else
+	duration=25
+fi
+
+cd $(dirname $(readlink -f $0))
+pulse_devices=`pacmd list-sinks | grep index | perl -pe 's/.*?(\d+)$/\1/' `
+alsa_devices=`pacmd list-sinks | grep alsa.device | awk '{print $3}' | perl -pe '$_=eval($_)."\n"'`
+
+monitor_on() {
+	xset dpms force on
+}
+
+monitor_off() {
+	xset dpms force off
+}
+
+is_monitor_on() {
+	test `xset q | tail -1 | awk '{print $3}'` = On
+}
+
+minutes_since() {
+	now=`date +%s`
+	expr \( $now - $1 \) / 5
+}
+
+alarms() {
+	find alarms alarms alarms alarms alarms alarms alarms alarms alarms -mindepth 1 | shuf
+}
+
+sound_on() {
+	for device in pulse_devices; do
+		pacmd set-sink-mute $device off >/dev/null 2>/dev/null
+		pacmd set-sink-volume $device 98304 >/dev/null 2>/dev/null
+	done
+	for device in alsa_devices; do
+		amixer -Dhw:$device set Master 100 unmute >/dev/null 2>/dev/null
+		amixer -Dhw:$device set PCM 100 unmute >/dev/null 2>/dev/null
+	done
+}
+
+sound_off() {
+	pulse_devices=`pacmd list-sinks | grep index | perl -pe 's/.*?(\d+)$/\1/' `
+	alsa_devices=`pacmd list-sinks | grep alsa.device | awk '{print $3}' | perl -pe '$_=eval($_)."\n"'`
+	for device in pulse_devices; do
+		pacmd set-sink-mute $device on >/dev/null 2>/dev/null
+	done
+	for device in alsa_devices; do
+		amixer -Dhw:$device set Master mute >/dev/null 2>/dev/null
+	done
+}
+
+is_sound_on() {
+	test -z "`amixer | grep off`"
+}
+
+sleep_well() {
+	monitor_off
+	sound_on
+	# Espeak is very fussy about other programs using sound, so we don't use it directly
+	# echo '  It is time to take a nap. You will not be allowed to use this computer for the duration of your nap. Sleep well. ' | espeak
+	mplayer sleepwell.spx 1>/dev/null 2>/dev/null
+}
+
+notify() {
+	waketime=`expr $( date +%s ) + \( 60 \* $duration \) | awk '{print strftime("%H:%M", $0)};'`
+	echo $waketime
+	message="I\'m preparing to take a nap. Please don\'t make any noise and use headphones if possible. My nap will finish at $waketime."
+	for eejit in $*; do
+		command="echo $message | meteorsms $eejit"
+		ssh duairc@netsoc.tcd.ie -t "$command" >/dev/null 2>/dev/null
+	done
+}
+
+nap() {
+	start=`date +%s`
+	while [ `minutes_since $start` -lt $duration ]; do
+		if is_sound_on; then
+			sound_off
+		fi
+		if is_monitor_on; then
+			monitor_off
+		fi
+		sleep 0.1
+	done
+}
+
+alarm() {
+	sound_on
+	monitor_on
+	( alarms | xargs -d'\n' mplayer -loop 99999999 >/dev/null 2>/dev/null ) &
+	while is_sound_on; do
+		sleep 0.1
+	done
+	killall -9 mplayer
+}
+
+sleep_well
+notify andrew
+nap
+alarm
