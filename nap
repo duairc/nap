@@ -82,15 +82,18 @@ nap() {
 
 alarm() {
 	( alarms | xargs -d'\n' mplayer -loop 99999999 >/dev/null 2>/dev/null ) &
+	pid=$!
 	monitor_on
 	sound_on
 	while is_sound_on; do
 		sleep 0.1
 	done
-	killall -9 mplayer
+	kill -9 $pid
 }
 
 sleep_well
 notify andrew
 nap
 alarm
+sleep 10m
+alarm just in case
