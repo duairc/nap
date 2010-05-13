@@ -23,7 +23,7 @@ is_monitor_on() {
 
 minutes_since() {
 	now=`date +%s`
-	expr \( $now - $1 \) / 5
+	expr \( $now - $1 \) / 60
 }
 
 alarms() {
