@@ -1,13 +1,8 @@
 #!/bin/sh
-if [ -n $1 ]; then
-	duration=$1
-else
-	duration=25
-fi
-
+duration=$([ -n $1 ] && echo $1 || echo 25);
 cd $(dirname $(readlink -f $0))
 pulse_devices=`pacmd list-sinks | grep index | perl -pe 's/.*?(\d+)$/\1/' `
-alsa_devices=`pacmd list-sinks | grep alsa.device | awk '{print $3}' | perl -pe '$_=eval($_)."\n"'`
+alsa_devices=`pacmd list-sinks | grep alsa.device | awk '{print $3}' | perl -pe 's/.*/eval$_/e'`
 
 monitor_on() {
 	xset dpms force on
@@ -31,23 +26,21 @@ alarms() {
 }
 
 sound_on() {
-	for device in pulse_devices; do
-		pacmd set-sink-mute $device off >/dev/null 2>/dev/null
-		pacmd set-sink-volume $device 98304 >/dev/null 2>/dev/null
-	done
-	for device in alsa_devices; do
+	for device in $alsa_devices; do
 		amixer -Dhw:$device set Master 100 unmute >/dev/null 2>/dev/null
 		amixer -Dhw:$device set PCM 100 unmute >/dev/null 2>/dev/null
+	done
+	for device in $pulse_devices; do
+		pacmd set-sink-mute $device off >/dev/null 2>/dev/null
+		pacmd set-sink-volume $device 98304 >/dev/null 2>/dev/null
 	done
 }
 
 sound_off() {
-	pulse_devices=`pacmd list-sinks | grep index | perl -pe 's/.*?(\d+)$/\1/' `
-	alsa_devices=`pacmd list-sinks | grep alsa.device | awk '{print $3}' | perl -pe '$_=eval($_)."\n"'`
-	for device in pulse_devices; do
+	for device in $pulse_devices; do
 		pacmd set-sink-mute $device on >/dev/null 2>/dev/null
 	done
-	for device in alsa_devices; do
+	for device in $alsa_devices; do
 		amixer -Dhw:$device set Master mute >/dev/null 2>/dev/null
 	done
 }
@@ -66,7 +59,7 @@ sleep_well() {
 
 notify() {
 	waketime=`expr $( date +%s ) + \( 60 \* $duration \) | awk '{print strftime("%H:%M", $0)};'`
-	echo $waketime
+	waketime=`expr $( date +%s ) + \( 60 \* $duration \) | awk '{print strftime("%H:%M", $0)}'`
 	message="I\'m preparing to take a nap. Please don\'t make any noise and use headphones if possible. My nap will finish at $waketime."
 	for eejit in $*; do
 		command="echo $message | meteorsms $eejit"
@@ -88,9 +81,9 @@ nap() {
 }
 
 alarm() {
-	sound_on
-	monitor_on
 	( alarms | xargs -d'\n' mplayer -loop 99999999 >/dev/null 2>/dev/null ) &
+	monitor_on
+	sound_on
 	while is_sound_on; do
 		sleep 0.1
 	done
@@ -98,6 +91,6 @@ alarm() {
 }
 
 sleep_well
-notify andrew
+notify me
 nap
 alarm
